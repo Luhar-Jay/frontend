@@ -263,7 +263,7 @@ const BirthdayPopup = () => {
           </div>
 
           <div className="-mt-10 rounded-t-3xl bg-white px-6 pb-6 pt-6">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mt-6">
               <BirthdayAvatar user={current} />
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-slate-900">{current.name}</p>

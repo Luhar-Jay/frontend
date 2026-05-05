@@ -138,7 +138,7 @@ export function AdminOrgView({ org, userId }: AdminOrgViewProps) {
                         <span className="ml-2 text-xs font-normal text-gray-400">(You)</span>
                       )}
                     </p>
-                    <p className="truncate text-xs capitalize text-gray-400">
+                    <p className="truncate text-xs text-gray-400">
                       {member.email} &bull; {roleLabel(member)}
                     </p>
                   </div>
