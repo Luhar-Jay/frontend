@@ -23,6 +23,7 @@ import {
   BriefcaseBusiness,
   Handshake,
   Trash2,
+  Receipt,
 } from "lucide-react";
 import logo from "../../assets/Mainlogo.png";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
@@ -86,6 +87,7 @@ const mainNav: MainNavItem[] = [
     end: false,
     roles: ["admin", "hr", "super-admin"],
   },
+  { path: "/expenses", label: "Expenses", icon: Receipt, end: false },
   // {
   //   path: "/employee",
   //   label: "Employee",

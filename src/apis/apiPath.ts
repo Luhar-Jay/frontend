@@ -112,6 +112,21 @@ export const apiPath = {
     list: "/contact-logs",
     byId: "/contact-logs/",
   },
+  expenses: {
+    list: "/expenses",
+    my: "/expenses/my",
+    summary: "/expenses/summary",
+    report: "/expenses/report",
+    create: "/expenses",
+    byId: "/expenses/",
+    review: "/expenses/:id/review",
+    reimburse: "/expenses/:id/reimburse",
+  },
+  expenseCategories: {
+    list: "/expense-categories",
+    create: "/expense-categories",
+    byId: "/expense-categories/",
+  },
   organization: {
     create: "/organization",
     my: "/organization/my",

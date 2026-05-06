@@ -23,6 +23,7 @@ import HolidaysPage from "./pages/holidays/HolidaysPage";
 import HiringPage from "./pages/hiring/HiringPage";
 import CRMPage from "./pages/crm/CRMPage";
 import OnboardingPage from "./pages/onboarding/OnboardingPage";
+import Expenses from "./pages/expenses/Expenses";
 
 function App() {
   return (
@@ -69,6 +70,7 @@ function App() {
           <Route path="/holidays" element={<HolidaysPage />} />
           <Route path="/hiring" element={<HiringPage />} />
           <Route path="/crm" element={<CRMPage />} />
+          <Route path="/expenses" element={<Expenses />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
