@@ -1,4 +1,4 @@
-import { Bookmark, X, ChevronRight, ExternalLink } from "lucide-react";
+import { Bookmark, X, ChevronRight } from "lucide-react";
 import type { MessageBookmark } from "../../types/chat.types";
 import { resolveProfileImageUrl } from "../../utils/mediaUrl";
 import { formatMessageTime } from "./chatUtils";

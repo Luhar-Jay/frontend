@@ -59,7 +59,6 @@ export function ScheduledMessagesDrawer({ scheduled, isLoading, onClose, onDelet
         ) : (
           <div className="divide-y divide-gray-50">
             {pending.map((sm) => {
-              const target = sm.group ?? sm.receiver;
               const isGroup = !!sm.group;
               const avatar = !isGroup && sm.receiver
                 ? resolveProfileImageUrl(sm.receiver.profileImage)

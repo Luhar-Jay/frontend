@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Forward, X, Search, Users, User as UserIcon, Loader2 } from "lucide-react";
+import { Forward, X, Search, Users, Loader2 } from "lucide-react";
 import type { ChatGroup, ChatUser } from "../../types/chat.types";
 import { resolveProfileImageUrl } from "../../utils/mediaUrl";
 

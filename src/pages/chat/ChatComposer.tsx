@@ -8,12 +8,11 @@ import {
   Clock,
   Paperclip,
   Pencil,
-  Plus,
   Send,
   Smile,
   X,
 } from "lucide-react";
-import type { ChatAttachment, ChatMessage, GifResult } from "../../types/chat.types";
+import type { ChatMessage, GifResult } from "../../types/chat.types";
 import type { User } from "../../types/user.types";
 import EmojiPicker from "../../components/chat/EmojiPicker";
 import { MentionSuggestions } from "./MentionSuggestions";
@@ -148,7 +147,7 @@ export function ChatComposer({
       closeAll();
       onGifSelect(gif);
     },
-    [onGifSelect]
+    [closeAll, onGifSelect]
   );
 
   const canSend = messageInput.trim().length > 0 || pendingFiles.length > 0;
