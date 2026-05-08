@@ -1,11 +1,24 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { ChangeEvent, Dispatch, KeyboardEvent, RefObject, SetStateAction } from "react";
-import { CornerUpLeft, FileText, Paperclip, Pencil, Send, Smile, X } from "lucide-react";
-import type { ChatMessage } from "../../types/chat.types";
+import {
+  CornerUpLeft,
+  FileText,
+  ImagePlay,
+  Clock,
+  Paperclip,
+  Pencil,
+  Plus,
+  Send,
+  Smile,
+  X,
+} from "lucide-react";
+import type { ChatAttachment, ChatMessage, GifResult } from "../../types/chat.types";
 import type { User } from "../../types/user.types";
 import EmojiPicker from "../../components/chat/EmojiPicker";
 import { MentionSuggestions } from "./MentionSuggestions";
+import { GifPicker } from "./GifPicker";
+import { ScheduleMessagePicker } from "./ScheduleMessagePicker";
 import { formatFileSize } from "./chatUtils";
 import type { PendingChatFile } from "./chatTypes";
 
@@ -33,7 +46,11 @@ type ChatComposerProps = {
   onInputChange: (e: ChangeEvent<HTMLTextAreaElement>) => void;
   onKeyDown: (e: KeyboardEvent) => void;
   onEmojiSelect: (emoji: string) => void;
+  onGifSelect: (gif: GifResult) => void;
+  onScheduleSend: (scheduledAt: string) => Promise<void>;
 };
+
+type ActivePopover = "emoji" | "gif" | "schedule" | "plus" | null;
 
 export function ChatComposer({
   messageInput,
@@ -59,9 +76,22 @@ export function ChatComposer({
   onInputChange,
   onKeyDown,
   onEmojiSelect,
+  onGifSelect,
+  onScheduleSend,
 }: ChatComposerProps) {
   const mentionContainerRef = useRef<HTMLDivElement>(null);
   const [caretPos, setCaretPos] = useState(0);
+  const [activePopover, setActivePopover] = useState<ActivePopover>(null);
+
+  const togglePopover = (name: ActivePopover) => {
+    setActivePopover((prev) => (prev === name ? null : name));
+    if (name !== "emoji") setEmojiOpen(false);
+  };
+
+  const closeAll = () => {
+    setActivePopover(null);
+    setEmojiOpen(false);
+  };
 
   const mentionQuery = useMemo((): string | null => {
     const before = messageInput.slice(0, caretPos);
@@ -82,9 +112,7 @@ export function ChatComposer({
     const after = messageInput.slice(cursor);
     if (!/@([^\s@]*)$/.test(before)) return;
     const stripped = before.replace(/@([^\s@]*)$/, "");
-    flushSync(() => {
-      setMessageInput(stripped + after);
-    });
+    flushSync(() => { setMessageInput(stripped + after); });
     requestAnimationFrame(() => {
       if (!ta) return;
       const pos = stripped.length;
@@ -100,15 +128,10 @@ export function ChatComposer({
       const cursor = ta.selectionStart ?? 0;
       const before = messageInput.slice(0, cursor);
       const after = messageInput.slice(cursor);
-      const rawName = (user.name ?? "").trim();
-      const displayName = rawName || "unknown";
-      // Replace @query with @DisplayName plus space so picker closes (@… no longer anchored at caret)
+      const displayName = (user.name ?? "unknown").trim() || "unknown";
       const replaced = before.replace(/@([^\s@]*)$/, `@${displayName} `);
-      flushSync(() => {
-        setMessageInput(replaced + after);
-      });
+      flushSync(() => { setMessageInput(replaced + after); });
       onMentionAdd(user);
-
       requestAnimationFrame(() => {
         ta.focus();
         const pos = replaced.length;
@@ -120,8 +143,20 @@ export function ChatComposer({
     [messageInput, setMessageInput, onMentionAdd, inputRef]
   );
 
+  const handleGifSelect = useCallback(
+    (gif: GifResult) => {
+      closeAll();
+      onGifSelect(gif);
+    },
+    [onGifSelect]
+  );
+
+  const canSend = messageInput.trim().length > 0 || pendingFiles.length > 0;
+
   return (
-    <div className="relative z-10 border-t border-gray-200/70 bg-white px-3 py-3 shadow-[0_-1px_8px_rgba(0,0,0,0.05)] sm:px-6">
+    <div className="relative z-10 border-t border-gray-200/70 bg-white px-3 py-3 shadow-[0_-1px_8px_rgba(0,0,0,0.05)] sm:px-4">
+
+      {/* Pending file previews */}
       {pendingFiles.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
           {pendingFiles.map((pf) => (
@@ -130,11 +165,7 @@ export function ChatComposer({
               className="relative flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-2.5 py-1.5"
             >
               {pf.previewUrl ? (
-                <img
-                  src={pf.previewUrl}
-                  alt={pf.file.name}
-                  className="h-10 w-10 rounded-lg object-cover"
-                />
+                <img src={pf.previewUrl} alt={pf.file.name} className="h-10 w-10 rounded-lg object-cover" />
               ) : (
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100">
                   <FileText className="h-5 w-5 text-violet-600" />
@@ -160,6 +191,7 @@ export function ChatComposer({
         </div>
       )}
 
+      {/* Edit banner */}
       {editTarget && (
         <div className="mb-2 flex items-center gap-2 rounded-xl border-l-[3px] border-amber-400 bg-amber-50 py-2 pl-3 pr-2">
           <Pencil className="h-3.5 w-3.5 shrink-0 text-amber-500" />
@@ -167,19 +199,14 @@ export function ChatComposer({
             <p className="text-[11px] font-semibold text-amber-600">Editing message</p>
             <p className="truncate text-xs text-gray-500">{editTarget.text}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setEditTarget(null);
-              setMessageInput("");
-            }}
-            className="shrink-0 rounded-md p-1 text-gray-400 hover:bg-amber-100 hover:text-gray-600"
-          >
+          <button type="button" onClick={() => { setEditTarget(null); setMessageInput(""); }}
+            className="shrink-0 rounded-md p-1 text-gray-400 hover:bg-amber-100">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
 
+      {/* Reply banner */}
       {replyTo && (
         <div className="mb-2 flex items-center gap-2 rounded-xl border-l-[3px] border-violet-500 bg-violet-50 py-2 pl-3 pr-2">
           <CornerUpLeft className="h-3.5 w-3.5 shrink-0 text-violet-500" />
@@ -191,49 +218,43 @@ export function ChatComposer({
               {replyTo.message || (replyTo.attachments?.length ? "📎 Attachment" : "")}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setReplyTo(null)}
-            className="shrink-0 rounded-md p-1 text-gray-400 hover:bg-violet-100 hover:text-gray-600"
-          >
+          <button type="button" onClick={() => setReplyTo(null)}
+            className="shrink-0 rounded-md p-1 text-gray-400 hover:bg-violet-100">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
 
-      <div className="flex items-end gap-2 sm:gap-3">
+      {/* Main input row */}
+      <div className="flex items-end gap-2">
+
+        {/* ── Left actions ─────────────────────────────────────────────────── */}
+        {/* Attach */}
         <button
           type="button"
           title="Attach file"
           onClick={() => fileInputRef.current?.click()}
-          className="mb-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+          className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
         >
-          <Paperclip className="h-5 w-5" />
+          <Paperclip className="h-[18px] w-[18px]" />
         </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
+        <input ref={fileInputRef} type="file" multiple
           accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.mp4,.mp3"
-          className="hidden"
-          onChange={onFileChange}
-        />
+          className="hidden" onChange={onFileChange} />
 
+        {/* Emoji */}
         <div className="relative mb-0.5 shrink-0">
           <button
             ref={emojiButtonRef}
             type="button"
-            onClick={() => setEmojiOpen((o) => !o)}
             title="Emoji"
-            className={`flex h-10 w-10 items-center justify-center rounded-xl transition-all ${
-              emojiOpen
-                ? "bg-violet-100 text-violet-600"
-                : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            onClick={() => { togglePopover("emoji"); setEmojiOpen((o) => !o); }}
+            className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all ${
+              emojiOpen ? "bg-violet-100 text-violet-600" : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
             }`}
           >
-            <Smile className="h-5 w-5" />
+            <Smile className="h-[18px] w-[18px]" />
           </button>
-
           {emojiOpen && (
             <div ref={emojiPickerRef} className="absolute bottom-full left-0 z-50 mb-2">
               <EmojiPicker onSelect={onEmojiSelect} />
@@ -241,52 +262,104 @@ export function ChatComposer({
           )}
         </div>
 
-        <div ref={mentionContainerRef} className="relative min-w-0 flex-1">
-          {showMentions && (
-            <MentionSuggestions
-              query={mentionQuery ?? ""}
-              users={availableUsers}
-              currentUserId={currentUserId}
-              onSelect={handleMentionSelect}
-              onDismiss={dismissIncompleteMention}
-            />
-          )}
-          <textarea
-            ref={inputRef}
-            value={messageInput}
-            onChange={(e) => {
-              syncCaretFromTarget(e.target);
-              onInputChange(e);
-            }}
-            onKeyDown={onKeyDown}
-            placeholder="Type a message... (@mention someone)"
-            rows={1}
-            className="max-h-32 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none transition focus:border-violet-300 focus:bg-white focus:ring-2 focus:ring-violet-500/20"
-            style={{ height: "auto", minHeight: "44px" }}
-            onSelect={(e) => syncCaretFromTarget(e.currentTarget)}
-            onKeyUp={(e) => syncCaretFromTarget(e.currentTarget)}
-            onClick={(e) => syncCaretFromTarget(e.currentTarget)}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              target.style.height = "auto";
-              target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
-            }}
-          />
+        {/* ── Input area ───────────────────────────────────────────────────── */}
+        <div className="relative min-w-0 flex-1">
+          {/* Inner wrapper styled like input */}
+          <div className="flex items-end rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 transition focus-within:border-violet-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-violet-500/20">
+
+            {/* Mention suggestions float above */}
+            <div ref={mentionContainerRef} className="relative min-w-0 flex-1">
+              {showMentions && (
+                <MentionSuggestions
+                  query={mentionQuery ?? ""}
+                  users={availableUsers}
+                  currentUserId={currentUserId}
+                  onSelect={handleMentionSelect}
+                  onDismiss={dismissIncompleteMention}
+                />
+              )}
+              <textarea
+                ref={inputRef}
+                value={messageInput}
+                onChange={(e) => { syncCaretFromTarget(e.target); onInputChange(e); }}
+                onKeyDown={onKeyDown}
+                placeholder="Type a message…"
+                rows={1}
+                className="max-h-32 w-full resize-none bg-transparent text-sm outline-none placeholder:text-gray-400"
+                style={{ height: "auto", minHeight: "24px" }}
+                onSelect={(e) => syncCaretFromTarget(e.currentTarget)}
+                onKeyUp={(e) => syncCaretFromTarget(e.currentTarget)}
+                onClick={(e) => syncCaretFromTarget(e.currentTarget)}
+                onInput={(e) => {
+                  const t = e.target as HTMLTextAreaElement;
+                  t.style.height = "auto";
+                  t.style.height = `${Math.min(t.scrollHeight, 128)}px`;
+                }}
+              />
+            </div>
+
+            {/* Right side of input: GIF · Schedule · + menu */}
+            <div className="ml-2 flex shrink-0 items-center gap-0.5 self-end pb-0.5">
+
+              {/* GIF button */}
+              <div className="relative">
+                <button
+                  type="button"
+                  title="Send GIF"
+                  onClick={() => togglePopover("gif")}
+                  className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${
+                    activePopover === "gif"
+                      ? "bg-violet-100 text-violet-600"
+                      : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  }`}
+                >
+                  <ImagePlay className="h-4 w-4" />
+                </button>
+                {activePopover === "gif" && (
+                  <GifPicker onSelect={handleGifSelect} onClose={() => setActivePopover(null)} />
+                )}
+              </div>
+
+              {/* Schedule button */}
+              <div className="relative">
+                <button
+                  type="button"
+                  title="Schedule message"
+                  onClick={() => togglePopover("schedule")}
+                  className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${
+                    activePopover === "schedule"
+                      ? "bg-violet-100 text-violet-600"
+                      : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                  }`}
+                >
+                  <Clock className="h-4 w-4" />
+                </button>
+                {activePopover === "schedule" && (
+                  <ScheduleMessagePicker
+                    onSchedule={onScheduleSend}
+                    onClose={() => setActivePopover(null)}
+                    disabled={!canSend}
+                  />
+                )}
+              </div>
+
+            </div>
+          </div>
         </div>
 
+        {/* ── Send button ──────────────────────────────────────────────────── */}
         <button
           type="button"
           onClick={onSend}
-          disabled={!messageInput.trim() && pendingFiles.length === 0}
-          className="mb-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-sm transition-all hover:bg-violet-700 hover:shadow-md disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none"
+          disabled={!canSend}
+          className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-sm transition-all hover:bg-violet-700 hover:shadow-md disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none"
         >
-          <Send className="h-5 w-5" />
+          <Send className="h-[18px] w-[18px]" />
         </button>
       </div>
 
-      <p className="mt-1.5 text-[11px] text-gray-400 sm:hidden">Tap send or press Enter</p>
       <p className="mt-1.5 hidden text-[11px] text-gray-400 sm:block">
-        Press Enter to send · Shift+Enter for new line · @ to mention
+        Enter to send · Shift+Enter for new line · @ to mention
       </p>
     </div>
   );

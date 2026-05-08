@@ -8,7 +8,8 @@ type ReplyCardProps = {
 };
 
 export function ReplyCard({ replyTo, isMine, onClick }: ReplyCardProps) {
-  const firstAtt = replyTo.attachments?.[0];
+  const isDeleted = replyTo.message === null;
+  const firstAtt = !isDeleted ? replyTo.attachments?.[0] : undefined;
 
   return (
     <button
@@ -24,45 +25,54 @@ export function ReplyCard({ replyTo, isMine, onClick }: ReplyCardProps) {
         {replyTo.sender.name}
       </p>
 
-      {firstAtt && (
-        <div className="mb-1 flex items-center gap-2">
-          {isImageMime(firstAtt.mimeType) ? (
-            <img
-              src={firstAtt.url}
-              alt={firstAtt.name}
-              className="h-10 w-10 rounded-lg object-cover"
-            />
-          ) : isVideoMime(firstAtt.mimeType) ? (
-            <div
-              className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm ${isMine ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"}`}
-            >
-              ▶
-            </div>
-          ) : (
-            <div
-              className={`flex h-10 w-10 items-center justify-center rounded-lg text-lg ${isMine ? "bg-white/20" : "bg-gray-200"}`}
-            >
-              {getFileIcon(firstAtt.mimeType)}
+      {isDeleted ? (
+        <p
+          className={`text-[11px] italic leading-relaxed ${isMine ? "text-white/50" : "text-gray-400"}`}
+        >
+          This message was deleted
+        </p>
+      ) : (
+        <>
+          {firstAtt && (
+            <div className="mb-1 flex items-center gap-2">
+              {isImageMime(firstAtt.mimeType) ? (
+                <img
+                  src={firstAtt.url}
+                  alt={firstAtt.name}
+                  className="h-10 w-10 rounded-lg object-cover"
+                />
+              ) : isVideoMime(firstAtt.mimeType) ? (
+                <div
+                  className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm ${isMine ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"}`}
+                >
+                  ▶
+                </div>
+              ) : (
+                <div
+                  className={`flex h-10 w-10 items-center justify-center rounded-lg text-lg ${isMine ? "bg-white/20" : "bg-gray-200"}`}
+                >
+                  {getFileIcon(firstAtt.mimeType)}
+                </div>
+              )}
+              <span
+                className={`truncate text-[11px] max-w-[140px] ${isMine ? "text-white/70" : "text-gray-500"}`}
+              >
+                {isVideoMime(firstAtt.mimeType)
+                  ? "Video"
+                  : isImageMime(firstAtt.mimeType)
+                    ? "Photo"
+                    : firstAtt.name}
+              </span>
             </div>
           )}
-          <span
-            className={`truncate text-[11px] max-w-[140px] ${isMine ? "text-white/70" : "text-gray-500"}`}
-          >
-            {isVideoMime(firstAtt.mimeType)
-              ? "Video"
-              : isImageMime(firstAtt.mimeType)
-                ? "Photo"
-                : firstAtt.name}
-          </span>
-        </div>
-      )}
-
-      {(replyTo.message || !firstAtt) && (
-        <p
-          className={`line-clamp-2 text-[11px] leading-relaxed ${isMine ? "text-white/70" : "text-gray-500"}`}
-        >
-          {replyTo.message || "📎 Attachment"}
-        </p>
+          {(replyTo.message || !firstAtt) && (
+            <p
+              className={`line-clamp-2 text-[11px] leading-relaxed ${isMine ? "text-white/70" : "text-gray-500"}`}
+            >
+              {replyTo.message || "📎 Attachment"}
+            </p>
+          )}
+        </>
       )}
     </button>
   );

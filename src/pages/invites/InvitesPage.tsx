@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Building2, CheckCircle2, XCircle, Mail, Search, Send, Clock, Users } from "lucide-react";
+import { Building2, CheckCircle2, XCircle, Mail, Search, Send, Clock, Users, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import {
   useMyInvites,
@@ -47,6 +47,7 @@ function RequestStatusBadge({ status }: { status: JoinRequest["status"] }) {
 function InviteCard({ invite }: { invite: OrgInvite }) {
   const acceptMutation = useAcceptInvite();
   const rejectMutation = useRejectInvite();
+  const [isExpired, setIsExpired] = useState(false);
 
   const adminAvatarUrl = resolveProfileImageUrl(invite.invitedBy?.profileImage);
   const adminInitials = invite.invitedBy?.name
@@ -61,7 +62,11 @@ function InviteCard({ invite }: { invite: OrgInvite }) {
       const res = await acceptMutation.mutateAsync(invite._id);
       toast.success(res.message ?? "Joined organization!");
     } catch (err) {
-      toast.error((err as ApiError)?.message ?? "Failed to accept invite");
+      const apiErr = err as ApiError;
+      if (apiErr?.status === 410) {
+        setIsExpired(true);
+      }
+      toast.error(apiErr?.message ?? "Failed to accept invite");
     }
   };
 
@@ -75,6 +80,9 @@ function InviteCard({ invite }: { invite: OrgInvite }) {
   };
 
   const busy = acceptMutation.isPending || rejectMutation.isPending;
+
+  const inviteExpired =
+    isExpired || (invite.expiresAt && new Date(invite.expiresAt) < new Date());
 
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
@@ -100,27 +108,35 @@ function InviteCard({ invite }: { invite: OrgInvite }) {
             <span>&bull;</span>
             <span>{formatDate(invite.createdAt)}</span>
             <span>&bull;</span>
-            <span className="text-amber-600">Expires {formatDate(invite.expiresAt)}</span>
+            <span className={inviteExpired ? "text-red-500 font-medium" : "text-amber-600"}>
+              {inviteExpired ? "Expired" : `Expires ${formatDate(invite.expiresAt)}`}
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="flex shrink-0 gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={handleReject}
-          disabled={busy}
-          className="border-red-200 text-red-500 hover:bg-red-50"
-        >
-          <XCircle className="mr-1.5 h-4 w-4" />
-          Decline
-        </Button>
-        <Button type="button" onClick={handleAccept} disabled={busy}>
-          <CheckCircle2 className="mr-1.5 h-4 w-4" />
-          {acceptMutation.isPending ? "Joining…" : "Accept"}
-        </Button>
-      </div>
+      {inviteExpired ? (
+        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-500">
+          <AlertCircle className="h-3.5 w-3.5" /> Expired
+        </span>
+      ) : (
+        <div className="flex shrink-0 gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleReject}
+            disabled={busy}
+            className="border-red-200 text-red-500 hover:bg-red-50"
+          >
+            <XCircle className="mr-1.5 h-4 w-4" />
+            Decline
+          </Button>
+          <Button type="button" onClick={handleAccept} disabled={busy}>
+            <CheckCircle2 className="mr-1.5 h-4 w-4" />
+            {acceptMutation.isPending ? "Joining…" : "Accept"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

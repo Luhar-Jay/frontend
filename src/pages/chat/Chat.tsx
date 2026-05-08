@@ -15,6 +15,10 @@ import {
   useChatUsers,
   useChatGroups,
   useOnlineUsers,
+  useDmPinnedMessages,
+  useGroupPinnedMessages,
+  useBookmarks,
+  useScheduledMessages,
   deleteMessageApi,
   editMessageApi,
   clearChatApi,
@@ -25,11 +29,25 @@ import {
   updateGroupApi,
   deleteGroupApi,
   leaveGroupApi,
+  pinMessageApi,
+  unpinMessageApi,
+  bookmarkMessageApi,
+  unbookmarkMessageApi,
+  forwardMessageApi,
+  createScheduledMessageApi,
+  deleteScheduledMessageApi,
+  markGroupMessagesReadApi,
 } from "../../apis/api/chat";
 import { getUserId } from "../../utils/session";
 import { socket } from "../../utils/socket";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ChatAttachment, ChatMessage, ChatReaction } from "../../types/chat.types";
+import type {
+  ChatAttachment,
+  ChatMessage,
+  ChatReaction,
+  ChatUser,
+  GifResult,
+} from "../../types/chat.types";
 import type { User } from "../../types/user.types";
 import { useChatNotifications } from "../../contexts/ChatNotificationContext";
 import { useChatWallpaper } from "../../hooks/useChatWallpaper";
@@ -49,6 +67,13 @@ import { DeleteMessageModal } from "./DeleteMessageModal";
 import { ChatReactionPickerPortal } from "./ChatReactionPickerPortal";
 import { CreateGroupModal } from "./CreateGroupModal";
 import { GroupInfoDrawer } from "./GroupInfoDrawer";
+import { PinnedMessagesDrawer } from "./PinnedMessagesDrawer";
+import { PinnedMessageBanner } from "./PinnedMessageBanner";
+import { BookmarksDrawer } from "./BookmarksDrawer";
+import { ScheduledMessagesDrawer } from "./ScheduledMessagesDrawer";
+import { MessageSearchModal } from "./MessageSearchModal";
+import { ForwardMessageModal } from "./ForwardMessageModal";
+import { ReadReceiptsModal } from "./ReadReceiptsModal";
 
 const Chat = () => {
   const currentUserId = getUserId();
@@ -91,6 +116,8 @@ const Chat = () => {
       startTransition(() => {
         setMessages(groupChatData.data.map((m) => ({ ...m, reactions: m.reactions ?? [] })));
       });
+      // Mark group messages as read when loaded
+      markGroupMessagesReadApi(selectedGroupId).catch(() => {});
     }
   }, [groupChatData, selectedGroupId]);
 
@@ -150,6 +177,29 @@ const Chat = () => {
 
   const [mobileShowChat, setMobileShowChat] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+
+  // ── Feature panels / modals ──────────────────────────────────────────────
+  const [pinsOpen, setPinsOpen] = useState(false);
+  const [bookmarksOpen, setBookmarksOpen] = useState(false);
+  const [scheduledOpen, setScheduledOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [forwardTarget, setForwardTarget] = useState<ChatMessage | null>(null);
+  const [readReceiptsTarget, setReadReceiptsTarget] = useState<ChatUser[] | null>(null);
+
+  // ── New feature data queries ──────────────────────────────────────────────
+  const { data: dmPins = [], refetch: refetchDmPins } = useDmPinnedMessages(selectedUserId);
+  const { data: groupPins = [], refetch: refetchGroupPins } = useGroupPinnedMessages(selectedGroupId);
+  const { data: bookmarks = [], refetch: refetchBookmarks } = useBookmarks();
+  const { data: scheduledMessages = [], refetch: refetchScheduled } = useScheduledMessages();
+
+  const pins = selectedGroupId ? groupPins : dmPins;
+  const refetchPins = selectedGroupId ? refetchGroupPins : refetchDmPins;
+
+  const pinnedMessageIds = useMemo(() => new Set(pins.map((p) => p._id)), [pins]);
+  const bookmarkedMessageIds = useMemo(
+    () => new Set(bookmarks.map((b) => b.message._id)),
+    [bookmarks]
+  );
 
   // ── Scroll ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -235,6 +285,20 @@ const Chat = () => {
     function handleOnline() {
       queryClient.invalidateQueries({ queryKey: ["onlineUsers"] });
     }
+    function handlePinned({ messageId }: { messageId: string; receiverId?: string }) {
+      if (messageId) refetchPins();
+    }
+    function handleUnpinned({ messageId }: { messageId: string; receiverId?: string }) {
+      if (messageId) refetchPins();
+    }
+    function handleScheduledSent({ id }: { id: string }) {
+      // Remove the sent scheduled message from local state immediately, then sync with server
+      queryClient.setQueryData<import("../../types/chat.types").ScheduledMessage[]>(
+        ["scheduledMessages"],
+        (old) => (old ?? []).filter((s) => s._id !== id)
+      );
+      refetchScheduled();
+    }
 
     socket.on("message:receive", handleReceive);
     socket.on("typing:start", handleTypingStart);
@@ -245,6 +309,9 @@ const Chat = () => {
     socket.on("message:reactions-updated", handleReactionsUpdated);
     socket.on("user:online", handleOnline);
     socket.on("user:offline", handleOnline);
+    socket.on("message:pinned", handlePinned);
+    socket.on("message:unpinned", handleUnpinned);
+    socket.on("scheduled:sent", handleScheduledSent);
 
     return () => {
       socket.off("message:receive", handleReceive);
@@ -256,8 +323,11 @@ const Chat = () => {
       socket.off("message:reactions-updated", handleReactionsUpdated);
       socket.off("user:online", handleOnline);
       socket.off("user:offline", handleOnline);
+      socket.off("message:pinned", handlePinned);
+      socket.off("message:unpinned", handleUnpinned);
+      socket.off("scheduled:sent", handleScheduledSent);
     };
-  }, [selectedUserId, currentUserId, queryClient, clearUnread]);
+  }, [selectedUserId, currentUserId, queryClient, clearUnread, refetchPins, refetchScheduled]);
 
   // ── Group socket events ───────────────────────────────────────────────────
   useEffect(() => {
@@ -280,6 +350,8 @@ const Chat = () => {
           return [...prev, { ...msg, reactions: msg.reactions ?? [] }];
         });
         clearUnread(`group:${groupId}`);
+        // Mark read immediately
+        socket.emit("group:messages:read", { groupId, messageIds: [msg._id] });
       }
     }
 
@@ -315,12 +387,23 @@ const Chat = () => {
         prev.map((m) => (m._id === messageId ? { ...m, message, isEdited: true } : m))
       );
     }
+    function handleGroupMessagesRead({ userId, messageIds }: { userId: string; messageIds: string[] }) {
+      if (userId === currentUserId) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          messageIds.includes(m._id) && !m.readBy?.some((r) => r._id === userId)
+            ? { ...m, readBy: [...(m.readBy ?? []), { _id: userId, name: "", profileImage: null }] }
+            : m
+        )
+      );
+    }
 
     socket.on("group:message:receive", handleGroupReceive);
     socket.on("group:typing:start", handleGroupTypingStart);
     socket.on("group:typing:stop", handleGroupTypingStop);
     socket.on("group:message:delete", handleGroupMessageDelete);
     socket.on("group:message:edit", handleGroupMessageEdit);
+    socket.on("group:messages:read", handleGroupMessagesRead);
 
     return () => {
       socket.off("group:message:receive", handleGroupReceive);
@@ -328,8 +411,9 @@ const Chat = () => {
       socket.off("group:typing:stop", handleGroupTypingStop);
       socket.off("group:message:delete", handleGroupMessageDelete);
       socket.off("group:message:edit", handleGroupMessageEdit);
+      socket.off("group:messages:read", handleGroupMessagesRead);
     };
-  }, [selectedGroupId, clearUnread]);
+  }, [selectedGroupId, currentUserId, clearUnread]);
 
   // ── Click-outside for emoji/menu ──────────────────────────────────────────
   useEffect(() => {
@@ -404,6 +488,9 @@ const Chat = () => {
     setEditTarget(null);
     setPendingFiles([]);
     setMentionedUserIds([]);
+    setPinsOpen(false);
+    setBookmarksOpen(false);
+    setScheduledOpen(false);
   };
 
   const handleSelectUser = useCallback(
@@ -621,6 +708,185 @@ const Chat = () => {
     mentionedUserIds,
   ]);
 
+  // ── GIF send ─────────────────────────────────────────────────────────────
+  const handleGifSelect = useCallback(
+    async (gif: GifResult) => {
+      if (!selectedUserId && !selectedGroupId) return;
+
+      const gifAttachment = {
+        url: gif.url,
+        name: gif.title || "GIF",
+        mimeType: "image/gif",
+        size: 0,
+      };
+
+      if (selectedGroupId) {
+        socket.emit(
+          "group:message:send",
+          {
+            groupId: selectedGroupId,
+            message: "",
+            attachments: [gifAttachment],
+            replyToId: null,
+            mentions: [],
+          },
+          (response: { success: boolean; data?: ChatMessage }) => {
+            if (response.success && response.data) {
+              setMessages((prev) => {
+                if (prev.some((m) => m._id === response.data!._id)) return prev;
+                return [...prev, response.data!];
+              });
+            }
+          }
+        );
+      } else {
+        socket.emit(
+          "message:send",
+          {
+            receiverId: selectedUserId,
+            message: "",
+            attachments: [gifAttachment],
+            replyToId: null,
+            mentions: [],
+          },
+          (response: { success: boolean; data?: ChatMessage }) => {
+            if (response.success && response.data) {
+              setMessages((prev) => {
+                if (prev.some((m) => m._id === response.data!._id)) return prev;
+                return [...prev, response.data!];
+              });
+            }
+          }
+        );
+      }
+    },
+    [selectedUserId, selectedGroupId]
+  );
+
+  // ── Schedule send ─────────────────────────────────────────────────────────
+  const handleScheduleSend = useCallback(
+    async (scheduledAt: string) => {
+      const text = messageInput.trim();
+      const hasFiles = pendingFiles.filter((f) => f.status === "done" && f.result).length > 0;
+      if (!text && !hasFiles) {
+        toast.error("Write a message before scheduling");
+        return;
+      }
+      if (!selectedUserId && !selectedGroupId) return;
+
+      const readyAttachments = pendingFiles
+        .filter((f) => f.status === "done" && f.result)
+        .map((f) => f.result!);
+
+      await createScheduledMessageApi({
+        receiverId: selectedUserId || undefined,
+        groupId: selectedGroupId || undefined,
+        message: text,
+        attachments: readyAttachments,
+        scheduledAt,
+      });
+
+      setMessageInput("");
+      setPendingFiles([]);
+      await refetchScheduled();
+      toast.success("Message scheduled!");
+    },
+    [messageInput, pendingFiles, selectedUserId, selectedGroupId, refetchScheduled]
+  );
+
+  // ── Pin / Unpin ───────────────────────────────────────────────────────────
+  const invalidatePins = useCallback(() => {
+    if (selectedGroupId) {
+      queryClient.invalidateQueries({ queryKey: ["groupPinned", selectedGroupId] });
+    } else if (selectedUserId) {
+      queryClient.invalidateQueries({ queryKey: ["dmPinned", selectedUserId] });
+    }
+  }, [queryClient, selectedUserId, selectedGroupId]);
+
+  const handlePinMsg = useCallback(
+    async (msg: ChatMessage) => {
+      const alreadyPinned = pinnedMessageIds.has(msg._id);
+      try {
+        if (alreadyPinned) {
+          await unpinMessageApi(msg._id);
+          toast.success("Message unpinned");
+        } else {
+          await pinMessageApi(msg._id);
+          toast.success("Message pinned");
+        }
+        invalidatePins();
+        // Notify other user/group via socket
+        socket.emit(alreadyPinned ? "message:unpinned" : "message:pinned", {
+          messageId: msg._id,
+          receiverId: selectedUserId || undefined,
+          groupId: selectedGroupId || undefined,
+        });
+      } catch (err: unknown) {
+        const message = (err as { message?: string })?.message;
+        toast.error(message || (alreadyPinned ? "Failed to unpin" : "Failed to pin message"));
+      }
+    },
+    [pinnedMessageIds, selectedUserId, selectedGroupId, invalidatePins]
+  );
+
+  // ── Bookmark / Unbookmark ─────────────────────────────────────────────────
+  const handleBookmarkMsg = useCallback(
+    async (msg: ChatMessage) => {
+      const alreadyBookmarked = bookmarkedMessageIds.has(msg._id);
+      try {
+        if (alreadyBookmarked) {
+          await unbookmarkMessageApi(msg._id);
+          toast.success("Bookmark removed");
+        } else {
+          await bookmarkMessageApi(msg._id);
+          toast.success("Message bookmarked");
+        }
+        await refetchBookmarks();
+      } catch {
+        toast.error(alreadyBookmarked ? "Failed to remove bookmark" : "Failed to bookmark");
+      }
+    },
+    [bookmarkedMessageIds, refetchBookmarks]
+  );
+
+  // ── Forward ───────────────────────────────────────────────────────────────
+  const handleForwardConfirm = useCallback(
+    async (targetId: string, type: "dm" | "group") => {
+      if (!forwardTarget) return;
+      await forwardMessageApi(forwardTarget._id, {
+        receiverId: type === "dm" ? targetId : undefined,
+        groupId: type === "group" ? targetId : undefined,
+      });
+      toast.success("Message forwarded");
+    },
+    [forwardTarget]
+  );
+
+  // ── Export chat ───────────────────────────────────────────────────────────
+  const handleExportChat = useCallback(() => {
+    if (!selectedUserId && !selectedGroupId) return;
+    const base = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5051/api/v1";
+    const url = selectedGroupId
+      ? `${base}/chat/groups/${selectedGroupId}/export`
+      : `${base}/chat/${selectedUserId}/export`;
+    window.open(url, "_blank");
+  }, [selectedUserId, selectedGroupId]);
+
+  // ── Search scroll ─────────────────────────────────────────────────────────
+  const handleJumpToMessage = useCallback((messageId: string) => {
+    const el = messageContainerRef.current?.querySelector(
+      `[data-msg-id="${messageId}"]`
+    ) as HTMLElement | null;
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedMsgId(messageId);
+      setTimeout(() => setHighlightedMsgId(null), 1500);
+    } else {
+      toast("Message not visible in current view", { icon: "↑" });
+    }
+  }, []);
+
+  // ── Common message handlers ───────────────────────────────────────────────
   const handleCopy = useCallback((text: string) => {
     navigator.clipboard.writeText(text).catch(() => {});
     toast.success("Copied to clipboard");
@@ -815,6 +1081,19 @@ const Chat = () => {
     setMentionedUserIds((prev) => [...prev, user._id]);
   }, []);
 
+  const handleDeleteScheduled = useCallback(
+    async (id: string) => {
+      try {
+        await deleteScheduledMessageApi(id);
+        await refetchScheduled();
+        toast.success("Scheduled message cancelled");
+      } catch {
+        toast.error("Failed to cancel scheduled message");
+      }
+    },
+    [refetchScheduled]
+  );
+
   const isSelectedOnline = selectedUserId ? onlineUserIds.has(selectedUserId) : false;
   const showTyping = Boolean(selectedUserId && typingUsers.has(selectedUserId));
 
@@ -841,6 +1120,21 @@ const Chat = () => {
   };
 
   const hasConversation = Boolean(selectedUserId || selectedGroupId);
+
+  // close side-panels when switching conversations
+  const closeSidePanels = () => {
+    setPinsOpen(false);
+    setBookmarksOpen(false);
+    setScheduledOpen(false);
+  };
+  const openSinglePanel = (panel: "pins" | "bookmarks" | "scheduled") => {
+    closeSidePanels();
+    if (panel === "pins") setPinsOpen(true);
+    if (panel === "bookmarks") setBookmarksOpen(true);
+    if (panel === "scheduled") setScheduledOpen(true);
+  };
+
+  const anySidePanel = pinsOpen || bookmarksOpen || scheduledOpen;
 
   return (
     <div className="flex h-[calc(95vh-5rem)] overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm">
@@ -885,6 +1179,19 @@ const Chat = () => {
               onMobileBack={handleMobileBack}
               onWallpaperClick={() => setWallpaperSidebarOpen(true)}
               onClearChatClick={() => setClearChatConfirm(true)}
+              onSearchClick={() => setSearchOpen(true)}
+              onPinsClick={() => openSinglePanel("pins")}
+              onBookmarksClick={() => openSinglePanel("bookmarks")}
+              onScheduledClick={() => openSinglePanel("scheduled")}
+              onExportClick={handleExportChat}
+            />
+
+            {/* Pinned message banner — key resets dismissed/index on conversation switch */}
+            <PinnedMessageBanner
+              key={selectedUserId || selectedGroupId}
+              pins={pins}
+              onJump={handleJumpToMessage}
+              onOpenDrawer={() => openSinglePanel("pins")}
             />
 
             <div className="flex flex-1 overflow-hidden">
@@ -902,17 +1209,56 @@ const Chat = () => {
                     : (selectedUser?.name ?? "")
                 }
                 isGroup={!!selectedGroupId}
+                pinnedMessageIds={pinnedMessageIds}
+                bookmarkedMessageIds={bookmarkedMessageIds}
                 onCopyText={handleCopy}
                 onReply={handleReply}
                 onDeleteMsg={handleDeleteMsg}
                 onEditMsg={handleEditMsg}
+                onForwardMsg={setForwardTarget}
+                onPinMsg={handlePinMsg}
+                onBookmarkMsg={handleBookmarkMsg}
                 onPickReaction={openReactionPicker}
                 onToggleReaction={toggleReactionOnMessage}
                 onPreview={setPreviewFile}
                 onScrollToReply={handleScrollToReply}
+                onShowReadReceipts={setReadReceiptsTarget}
               />
 
-              {groupInfoOpen && selectedGroup && (
+              {/* Side panels */}
+              {pinsOpen && (
+                <PinnedMessagesDrawer
+                  pins={pins}
+                  currentUserId={currentUserId}
+                  onClose={() => setPinsOpen(false)}
+                  onScrollToMessage={handleJumpToMessage}
+                  onUnpin={(msgId) =>
+                    handlePinMsg({ _id: msgId } as ChatMessage)
+                  }
+                />
+              )}
+
+              {bookmarksOpen && (
+                <BookmarksDrawer
+                  bookmarks={bookmarks}
+                  currentUserId={currentUserId}
+                  onClose={() => setBookmarksOpen(false)}
+                  onJumpToMessage={handleJumpToMessage}
+                  onRemoveBookmark={(msgId) =>
+                    handleBookmarkMsg({ _id: msgId } as ChatMessage)
+                  }
+                />
+              )}
+
+              {scheduledOpen && (
+                <ScheduledMessagesDrawer
+                  scheduled={scheduledMessages}
+                  onClose={() => setScheduledOpen(false)}
+                  onDelete={handleDeleteScheduled}
+                />
+              )}
+
+              {groupInfoOpen && selectedGroup && !anySidePanel && (
                 <GroupInfoDrawer
                   group={selectedGroup}
                   currentUserId={currentUserId}
@@ -949,6 +1295,8 @@ const Chat = () => {
               onInputChange={handleInputChange}
               onKeyDown={handleKeyDown}
               onEmojiSelect={handleEmojiSelect}
+              onGifSelect={handleGifSelect}
+              onScheduleSend={handleScheduleSend}
             />
           </>
         )}
@@ -996,6 +1344,35 @@ const Chat = () => {
           onlineUserIds={onlineUserIds}
           onClose={() => setShowCreateGroup(false)}
           onCreateGroup={handleCreateGroup}
+        />
+      )}
+
+      {searchOpen && (
+        <MessageSearchModal
+          onClose={() => setSearchOpen(false)}
+          onJumpToMessage={handleJumpToMessage}
+          receiverId={selectedUserId || undefined}
+          groupId={selectedGroupId || undefined}
+          availableUsers={allUsers as ChatUser[]}
+          currentUserId={currentUserId}
+        />
+      )}
+
+      {forwardTarget && (
+        <ForwardMessageModal
+          users={allUsers as ChatUser[]}
+          groups={groups}
+          currentUserId={currentUserId}
+          onClose={() => setForwardTarget(null)}
+          onForward={handleForwardConfirm}
+        />
+      )}
+
+      {readReceiptsTarget && (
+        <ReadReceiptsModal
+          readers={readReceiptsTarget}
+          totalMembers={(selectedGroup?.members.length ?? 1) - 1}
+          onClose={() => setReadReceiptsTarget(null)}
         />
       )}
     </div>

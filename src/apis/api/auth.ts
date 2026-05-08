@@ -182,6 +182,32 @@ export const useTeamBirthdays = () => {
   });
 };
 
+export const useForgotPassword = () => {
+  return useMutation({
+    mutationFn: async ({ email }: { email: string }) => {
+      const res = await api.post<{ success: boolean; message: string }>(
+        apiPath.auth.forgotPassword,
+        { email },
+        { auth: false }
+      );
+      return res;
+    },
+  });
+};
+
+export const useResetPassword = () => {
+  return useMutation({
+    mutationFn: async ({ token, password }: { token: string; password: string }) => {
+      const res = await api.post<{ success: boolean; message: string }>(
+        apiPath.auth.resetPassword + token,
+        { password },
+        { auth: false }
+      );
+      return res;
+    },
+  });
+};
+
 /** Returns [] when the current user cannot list users (e.g. not admin/hr). */
 export const useAssignableUsers = (orgContext?: string) => {
   return useQuery<User[]>({

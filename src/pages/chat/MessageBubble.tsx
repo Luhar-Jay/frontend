@@ -1,6 +1,18 @@
 import { useRef, useState } from "react";
-import { Check, CheckCheck, Copy, CornerUpLeft, Pencil, Smile, Trash2 } from "lucide-react";
-import type { ChatAttachment, ChatMessage } from "../../types/chat.types";
+import {
+  Check,
+  CheckCheck,
+  Copy,
+  CornerUpLeft,
+  Eye,
+  Forward,
+  Pencil,
+  Pin,
+  Bookmark,
+  Smile,
+  Trash2,
+} from "lucide-react";
+import type { ChatAttachment, ChatMessage, ChatUser } from "../../types/chat.types";
 import { AttachmentPreview } from "./AttachmentPreview";
 import { ReplyCard } from "./ReplyCard";
 import {
@@ -17,14 +29,20 @@ type MessageBubbleProps = {
   hasWallpaper?: boolean;
   currentUserId: string;
   isGroup?: boolean;
+  isPinned?: boolean;
+  isBookmarked?: boolean;
   onCopy: () => void;
   onReply: () => void;
   onDelete: () => void;
   onEdit: () => void;
+  onForward: () => void;
+  onPin: () => void;
+  onBookmark: () => void;
   onPickReaction: (anchor: HTMLElement | null) => void;
   onToggleReactionEmoji: (emoji: string) => void;
   onPreview: (att: ChatAttachment) => void;
   onScrollToReply: (replyId: string) => void;
+  onShowReadReceipts?: (readers: ChatUser[]) => void;
 };
 
 export function MessageBubble({
@@ -33,14 +51,20 @@ export function MessageBubble({
   hasWallpaper,
   currentUserId,
   isGroup = false,
+  isPinned = false,
+  isBookmarked = false,
   onCopy,
   onReply,
   onDelete,
   onEdit,
+  onForward,
+  onPin,
+  onBookmark,
   onPickReaction,
   onToggleReactionEmoji,
   onPreview,
   onScrollToReply,
+  onShowReadReceipts,
 }: MessageBubbleProps) {
   const [hoveredEmoji, setHoveredEmoji] = useState<string | null>(null);
   const reactionBtnRef = useRef<HTMLButtonElement>(null);
@@ -49,6 +73,7 @@ export function MessageBubble({
     : parseMessage(msg.message);
 
   const grouped = aggregateReactions(msg.reactions, currentUserId);
+  const readByCount = msg.readBy?.length ?? 0;
 
   return (
     <div className={`group mb-1 flex flex-col gap-1 ${isMine ? "items-end" : "items-start"}`}>
@@ -64,6 +89,15 @@ export function MessageBubble({
                 : "rounded-bl-md border border-gray-100 bg-white text-gray-800 shadow-sm"
           }`}
         >
+          {msg.isForwarded && (
+            <div
+              className={`mb-1.5 flex items-center gap-1 text-[10px] ${isMine ? "text-violet-200" : "text-gray-400"}`}
+            >
+              <Forward className="h-3 w-3" />
+              <span>Forwarded</span>
+            </div>
+          )}
+
           {msg.replyTo && (
             <ReplyCard
               replyTo={msg.replyTo}
@@ -127,22 +161,37 @@ export function MessageBubble({
               )}
             </p>
           )}
+
           <div
             className={`mt-1 flex items-center justify-end gap-1.5 ${
               isMine ? "text-violet-200" : "text-gray-400"
             }`}
           >
+            {isPinned && <Pin className="h-3 w-3 opacity-60" />}
             {msg.isEdited && <span className="text-[10px] italic opacity-70">edited</span>}
             <span className="text-[10px]">{formatMessageTime(msg.createdAt)}</span>
-            {isMine &&
-              (msg.isRead ? (
+            {isMine && isGroup && readByCount > 0 && onShowReadReceipts && (
+              <button
+                type="button"
+                title={`Read by ${readByCount}`}
+                onClick={() => onShowReadReceipts(msg.readBy ?? [])}
+                className={`flex items-center gap-0.5 text-[10px] ${isMine ? "text-violet-200 hover:text-white" : "text-gray-400 hover:text-gray-600"}`}
+              >
+                <Eye className="h-3 w-3" />
+                <span>{readByCount}</span>
+              </button>
+            )}
+            {isMine && !isGroup && (
+              msg.isRead ? (
                 <CheckCheck className="h-3.5 w-3.5" />
               ) : (
                 <Check className="h-3.5 w-3.5" />
-              ))}
+              )
+            )}
           </div>
         </div>
 
+        {/* Action toolbar */}
         <div className="pointer-events-none mb-0.5 flex shrink-0 items-center self-end rounded-xl border border-gray-100 bg-white p-0.5 opacity-0 shadow-lg transition-all duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
           <button
             type="button"
@@ -159,6 +208,38 @@ export function MessageBubble({
             className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition hover:bg-violet-50 hover:text-violet-600"
           >
             <CornerUpLeft className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            title="Forward"
+            onClick={onForward}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition hover:bg-violet-50 hover:text-violet-600"
+          >
+            <Forward className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            title={isPinned ? "Unpin" : "Pin"}
+            onClick={onPin}
+            className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${
+              isPinned
+                ? "bg-violet-50 text-violet-600"
+                : "text-gray-400 hover:bg-violet-50 hover:text-violet-600"
+            }`}
+          >
+            <Pin className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            title={isBookmarked ? "Remove bookmark" : "Bookmark"}
+            onClick={onBookmark}
+            className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${
+              isBookmarked
+                ? "bg-amber-50 text-amber-500"
+                : "text-gray-400 hover:bg-amber-50 hover:text-amber-500"
+            }`}
+          >
+            <Bookmark className={`h-3.5 w-3.5 ${isBookmarked ? "fill-amber-500" : ""}`} />
           </button>
           {isMine && (
             <button
@@ -180,7 +261,6 @@ export function MessageBubble({
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           )}
-
           <button
             ref={reactionBtnRef}
             type="button"
@@ -223,7 +303,6 @@ export function MessageBubble({
           {hoveredEmoji && (
             <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 w-max rounded-lg border bg-white shadow-lg p-2 text-xs">
               <div className="font-semibold mb-1">{hoveredEmoji}</div>
-
               <div className="flex flex-col gap-0.5 max-h-40 overflow-y-auto">
                 {grouped
                   .find((g) => g.emoji === hoveredEmoji)

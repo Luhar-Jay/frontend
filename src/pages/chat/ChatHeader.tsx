@@ -1,4 +1,4 @@
-import { ArrowLeft, Circle, Eraser, Info, MoreVertical, Palette } from "lucide-react";
+import { ArrowLeft, Bookmark, Circle, Clock, Download, Eraser, Info, MoreVertical, Palette, Pin, Search } from "lucide-react";
 import type { RefObject } from "react";
 import { Avatar } from "./Avatar";
 
@@ -23,6 +23,11 @@ type ChatHeaderProps = {
   onMobileBack: () => void;
   onWallpaperClick: () => void;
   onClearChatClick: () => void;
+  onSearchClick: () => void;
+  onPinsClick: () => void;
+  onBookmarksClick: () => void;
+  onScheduledClick: () => void;
+  onExportClick: () => void;
 };
 
 export function ChatHeader({
@@ -43,6 +48,11 @@ export function ChatHeader({
   onMobileBack,
   onWallpaperClick,
   onClearChatClick,
+  onSearchClick,
+  onPinsClick,
+  onBookmarksClick,
+  onScheduledClick,
+  onExportClick,
 }: ChatHeaderProps) {
   const title = isGroup ? groupName : selectedUserName;
 
@@ -88,6 +98,26 @@ export function ChatHeader({
         {subtitle}
       </div>
 
+      {/* Search button */}
+      <button
+        type="button"
+        title="Search messages"
+        onClick={onSearchClick}
+        className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+      >
+        <Search className="h-4 w-4" />
+      </button>
+
+      {/* Pins button */}
+      <button
+        type="button"
+        title="Pinned messages"
+        onClick={onPinsClick}
+        className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+      >
+        <Pin className="h-4 w-4" />
+      </button>
+
       {isGroup && onGroupInfoClick && (
         <button
           type="button"
@@ -117,26 +147,44 @@ export function ChatHeader({
         {menuOpen && (
           <div
             ref={menuRef}
-            className="absolute right-0 top-full z-50 mt-1.5 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl ring-1 ring-black/5"
+            className="absolute right-0 top-full z-50 mt-1.5 w-48 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl ring-1 ring-black/5"
           >
             <button
               type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                onWallpaperClick();
-              }}
+              onClick={() => { setMenuOpen(false); onBookmarksClick(); }}
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 transition hover:bg-violet-50 hover:text-violet-700"
+            >
+              <Bookmark className="h-4 w-4 text-amber-400" />
+              <span>Bookmarks</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMenuOpen(false); onScheduledClick(); }}
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 transition hover:bg-violet-50 hover:text-violet-700"
+            >
+              <Clock className="h-4 w-4 text-violet-400" />
+              <span>Scheduled</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMenuOpen(false); onWallpaperClick(); }}
               className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 transition hover:bg-violet-50 hover:text-violet-700"
             >
               <Palette className="h-4 w-4 text-gray-400" />
               <span>Wallpaper</span>
             </button>
+            <button
+              type="button"
+              onClick={() => { setMenuOpen(false); onExportClick(); }}
+              className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-gray-700 transition hover:bg-violet-50 hover:text-violet-700"
+            >
+              <Download className="h-4 w-4 text-gray-400" />
+              <span>Export Chat (PDF)</span>
+            </button>
             <div className="my-1 h-px bg-gray-100" />
             <button
               type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                onClearChatClick();
-              }}
+              onClick={() => { setMenuOpen(false); onClearChatClick(); }}
               className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-sm text-red-500 transition hover:bg-red-50"
             >
               <Eraser className="h-4 w-4" />

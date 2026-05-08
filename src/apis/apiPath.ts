@@ -11,6 +11,8 @@ export const apiPath = {
     logout: "/auth/logout",
     refreshToken: "/auth/refresh-token",
     teamBirthdays: "/auth/team/birthdays",
+    forgotPassword: "/auth/forgot-password",
+    resetPassword: "/auth/reset-password/",
   },
   projects: {
     list: "/project",

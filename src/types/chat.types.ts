@@ -6,7 +6,8 @@ export interface ChatUser {
 
 export interface ReplyToMessage {
   _id: string;
-  message: string;
+  /** null when the original message was soft-deleted for this viewer */
+  message: string | null;
   sender: { _id: string; name: string };
   attachments?: ChatAttachment[];
 }
@@ -31,10 +32,13 @@ export interface ChatMessage {
   message: string;
   isRead: boolean;
   isEdited?: boolean;
+  isForwarded?: boolean;
+  forwardedFrom?: string | null;
   attachments?: ChatAttachment[];
   replyTo?: ReplyToMessage | null;
   reactions?: ChatReaction[];
   mentions?: ChatUser[];
+  readBy?: ChatUser[];
   createdAt: string;
   updatedAt: string;
 }
@@ -72,4 +76,36 @@ export interface OnlineUsersResponse {
 export interface ChatGroupsResponse {
   success: boolean;
   data: ChatGroup[];
+}
+
+export interface PinnedMessage extends ChatMessage {
+  pinnedAt: string;
+  pinnedBy: ChatUser;
+}
+
+export interface MessageBookmark {
+  _id: string;
+  note: string;
+  savedAt: string;
+  message: ChatMessage;
+}
+
+export interface ScheduledMessage {
+  _id: string;
+  sender: string;
+  receiver?: ChatUser | null;
+  group?: { _id: string; name: string } | null;
+  message: string;
+  attachments?: ChatAttachment[];
+  scheduledAt: string;
+  sent: boolean;
+  createdAt: string;
+}
+
+export interface GifResult {
+  id: string;
+  title: string;
+  preview: string;
+  url: string;
+  dims: [number, number];
 }

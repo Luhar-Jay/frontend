@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import type { ChatAttachment, ChatMessage } from "../../types/chat.types";
+import type { ChatAttachment, ChatMessage, ChatUser } from "../../types/chat.types";
 import type { WallpaperValue } from "../../hooks/useChatWallpaper";
 import { getWallpaperStyle } from "../../hooks/useChatWallpaper";
 import { ConversationEmpty } from "./ConversationEmpty";
@@ -17,14 +17,20 @@ type ChatMessagesListProps = {
   showTyping: boolean;
   typingUserName: string;
   isGroup?: boolean;
+  pinnedMessageIds?: Set<string>;
+  bookmarkedMessageIds?: Set<string>;
   onCopyText: (text: string) => void;
   onReply: (msg: ChatMessage) => void;
   onDeleteMsg: (msgId: string) => void;
   onEditMsg: (msg: ChatMessage) => void;
+  onForwardMsg: (msg: ChatMessage) => void;
+  onPinMsg: (msg: ChatMessage) => void;
+  onBookmarkMsg: (msg: ChatMessage) => void;
   onPickReaction: (msg: ChatMessage, anchor: HTMLElement | null) => void;
   onToggleReaction: (messageId: string, emoji: string) => void;
   onPreview: (att: ChatAttachment) => void;
   onScrollToReply: (replyId: string) => void;
+  onShowReadReceipts?: (readers: ChatUser[]) => void;
 };
 
 export function ChatMessagesList({
@@ -37,14 +43,20 @@ export function ChatMessagesList({
   showTyping,
   typingUserName,
   isGroup = false,
+  pinnedMessageIds = new Set(),
+  bookmarkedMessageIds = new Set(),
   onCopyText,
   onReply,
   onDeleteMsg,
   onEditMsg,
+  onForwardMsg,
+  onPinMsg,
+  onBookmarkMsg,
   onPickReaction,
   onToggleReaction,
   onPreview,
   onScrollToReply,
+  onShowReadReceipts,
 }: ChatMessagesListProps) {
   const hasWallpaper = wallpaper !== "none";
 
@@ -88,14 +100,20 @@ export function ChatMessagesList({
               hasWallpaper={hasWallpaper}
               currentUserId={currentUserId}
               isGroup={isGroup}
+              isPinned={pinnedMessageIds.has(msg._id)}
+              isBookmarked={bookmarkedMessageIds.has(msg._id)}
               onCopy={() => onCopyText(msg.message)}
               onReply={() => onReply(msg)}
               onDelete={() => onDeleteMsg(msg._id)}
               onEdit={() => onEditMsg(msg)}
+              onForward={() => onForwardMsg(msg)}
+              onPin={() => onPinMsg(msg)}
+              onBookmark={() => onBookmarkMsg(msg)}
               onPickReaction={(el) => onPickReaction(msg, el)}
               onToggleReactionEmoji={(emoji) => void onToggleReaction(msg._id, emoji)}
               onPreview={onPreview}
               onScrollToReply={onScrollToReply}
+              onShowReadReceipts={onShowReadReceipts}
             />
           </div>
         ))
