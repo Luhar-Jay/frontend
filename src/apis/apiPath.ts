@@ -66,8 +66,12 @@ export const apiPath = {
   },
   notes: {
     list: "/notes",
+    search: "/notes/search",
     create: "/notes/create",
+    bulk: "/notes/bulk",
     byId: "/notes/",
+    attachments: "/notes/:id/attachments",
+    attachmentById: "/notes/:id/attachments/:attachmentId",
   },
   events: {
     list: "/events",

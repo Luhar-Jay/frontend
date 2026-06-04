@@ -1,5 +1,20 @@
 import type { StickyColorId } from "../utils/stickyNoteTheme";
 
+export interface NoteAttachment {
+  _id: string;
+  url: string;
+  publicId: string;
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
+export interface NoteChecklistItem {
+  _id: string;
+  text: string;
+  checked: boolean;
+}
+
 export interface StickyNote {
   _id: string;
   user: string;
@@ -9,6 +24,10 @@ export interface StickyNote {
   positionX?: number;
   positionY?: number;
   isArchived?: boolean;
+  isPinned?: boolean;
+  tags?: string[];
+  attachments?: NoteAttachment[];
+  checklist?: NoteChecklistItem[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -19,6 +38,10 @@ export type PatchNoteBody = {
   color?: StickyColorId;
   positionX?: number;
   positionY?: number;
+  isArchived?: boolean;
+  isPinned?: boolean;
+  tags?: string[];
+  checklist?: Array<{ text: string; checked: boolean }>;
 };
 
 export interface NotesListResponse {
@@ -37,4 +60,9 @@ export interface UpdateNoteResponse {
   success: boolean;
   message: string;
   note: StickyNote;
+}
+
+export interface DeleteNoteResponse {
+  success: boolean;
+  message: string;
 }
