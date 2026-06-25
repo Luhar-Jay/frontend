@@ -10,6 +10,7 @@ import {
   UserRound,
   Trash2,
   MessageCircle,
+  BriefcaseBusiness,
 } from "lucide-react";
 import logo from "@/assets/Mainlogo.png";
 import toast from "react-hot-toast";
@@ -179,7 +180,7 @@ const SidebarShell = ({ navItems, tasksBasePath, mobileOpen, onMobileClose }: Si
                     onClick={() => setProjectsOpen((o) => !o)}
                     className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100/90"
                   >
-                    <span className="flex-1 truncate">Projects</span>
+                    <span className="flex truncate "><BriefcaseBusiness className="h-5 w-5 shrink-0 text-gray-400 mr-2" /> Projects</span>
                     {projectsOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" /> : <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />}
                   </button>
                   {canCreateProjects && (
